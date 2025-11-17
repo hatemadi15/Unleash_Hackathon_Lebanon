@@ -19,6 +19,7 @@ function seed() {
     reward_points: 0,
     active_borrow_count: 0,
     is_blocked: false,
+    profile_image: null,
     created_at: now,
     updated_at: now
   };
@@ -33,6 +34,7 @@ function seed() {
     reward_points: 0,
     active_borrow_count: 0,
     is_blocked: false,
+    profile_image: null,
     created_at: now,
     updated_at: now
   };
@@ -47,6 +49,7 @@ function seed() {
     reward_points: 0,
     active_borrow_count: 0,
     is_blocked: false,
+    profile_image: null,
     created_at: now,
     updated_at: now
   };

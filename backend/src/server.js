@@ -18,6 +18,7 @@ const { setConfigValue, getNumericConfig, getBooleanConfig } = require('./config
 
 const PORT = process.env.PORT || 4000;
 const FRONTEND_DIR = path.join(__dirname, '..', '..', 'frontend');
+const MAX_PROFILE_IMAGE_BYTES = 500000; // ~500 KB cap to keep the JSON store compact
 
 // QR codes encode a URL or bare UUID. Clients are encouraged to extract the
 // `cup_id` before calling the API, but `normalizeCupIdSegment` ensures the
@@ -32,6 +33,20 @@ function normalizeCupIdSegment(segment) {
     decoded = segment;
   }
   return parseCupIdFromQr(decoded);
+}
+
+function validateProfileImage(dataUrl) {
+  if (dataUrl === '' || dataUrl === null) return '';
+  if (typeof dataUrl !== 'string') {
+    throw new Error('Profile image must be a base64 data URL');
+  }
+  if (!dataUrl.startsWith('data:image/')) {
+    throw new Error('Profile image must be a data:image URL');
+  }
+  if (Buffer.byteLength(dataUrl, 'utf8') > MAX_PROFILE_IMAGE_BYTES) {
+    throw new Error('Profile image exceeds 500KB limit');
+  }
+  return dataUrl;
 }
 
 function serveStatic(req, res, pathname) {
@@ -458,6 +473,7 @@ const server = http.createServer((req, res) => {
             reward_points: 0,
             active_borrow_count: 0,
             is_blocked: false,
+            profile_image: null,
             created_at: nowISO(),
             updated_at: nowISO()
           };
@@ -499,6 +515,35 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && pathname === '/user/profile') {
       if (!requireAuth(res, currentUser)) return;
       sendJSON(res, 200, { user: sanitizeUser(currentUser) });
+      return;
+    }
+
+    if (req.method === 'PUT' && pathname === '/user/profile') {
+      if (!requireAuth(res, currentUser)) return;
+      if (currentUser.role !== 'CUSTOMER') {
+        sendJSON(res, 403, { error: 'Only customers can update this profile' });
+        return;
+      }
+      parseBody(req)
+        .then(body => {
+          const { name, profile_image } = body || {};
+          if (typeof name === 'string') {
+            currentUser.name = name.trim();
+          }
+          if (profile_image !== undefined) {
+            try {
+              const validated = validateProfileImage(profile_image);
+              currentUser.profile_image = validated || null;
+            } catch (err) {
+              sendJSON(res, 400, { error: err.message });
+              return;
+            }
+          }
+          currentUser.updated_at = nowISO();
+          saveDB();
+          sendJSON(res, 200, { user: sanitizeUser(currentUser) });
+        })
+        .catch(() => sendJSON(res, 400, { error: 'Invalid JSON body' }));
       return;
     }
 

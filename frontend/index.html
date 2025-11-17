@@ -61,10 +61,30 @@
         </section>
 
         <section id="customerSection" class="panel-grid two-col hidden">
-          <div class="panel">
-            <h2>Customer dashboard</h2>
-            <p id="customerInfo"></p>
-            <button id="refreshProfile">Refresh profile</button>
+          <div class="panel profile-panel">
+            <div class="profile-card">
+              <img id="profileAvatar" alt="Profile avatar" />
+              <div class="profile-card__meta">
+                <p class="muted">Customer</p>
+                <h2 id="profileName">Your name</h2>
+                <p id="customerInfo" class="profile-card__stats"></p>
+              </div>
+            </div>
+            <form id="profileForm" class="form-grid profile-form">
+              <label>
+                Display name
+                <input type="text" id="profileNameInput" placeholder="Preferred name" />
+              </label>
+              <label>
+                Profile photo
+                <input type="file" id="profileImageInput" accept="image/*" />
+              </label>
+              <div class="profile-form__actions">
+                <button type="submit">Save profile</button>
+                <button type="button" id="clearProfileImage" class="ghost">Remove photo</button>
+                <button type="button" id="refreshProfile" class="ghost">Refresh</button>
+              </div>
+            </form>
           </div>
           <div class="panel">
             <h3>Borrow a cup</h3>
@@ -75,7 +95,7 @@
               </label>
               <label>
                 QR / Cup ID
-                <input type="text" id="customerBorrowQr" placeholder="Paste QR string" required />
+                <input type="text" id="customerBorrowQr" placeholder="Paste QR string" data-qr-input data-scan-default="true" required />
               </label>
               <button type="submit">Borrow cup</button>
             </form>
@@ -89,7 +109,7 @@
               </label>
               <label>
                 QR / Cup ID
-                <input type="text" id="customerReturnQr" placeholder="Paste QR string" required />
+                <input type="text" id="customerReturnQr" placeholder="Paste QR string" data-qr-input required />
               </label>
               <button type="submit">Return cup</button>
             </form>
@@ -99,7 +119,7 @@
             <form id="customerPurchaseForm" class="form-grid">
               <label>
                 QR / Cup ID
-                <input type="text" id="customerPurchaseQr" placeholder="Paste QR string" required />
+                <input type="text" id="customerPurchaseQr" placeholder="Paste QR string" data-qr-input required />
               </label>
               <button type="submit">Keep cup</button>
             </form>
@@ -130,7 +150,7 @@
               </label>
               <label>
                 Cup QR / ID
-                <input type="text" id="staffBorrowQr" required />
+                <input type="text" id="staffBorrowQr" data-qr-input required />
               </label>
               <button type="submit">Borrow cup</button>
             </form>
@@ -140,16 +160,32 @@
             <form id="staffReturnForm" class="form-grid">
               <label>
                 Cup QR / ID
-                <input type="text" id="staffReturnQr" required />
+                <input type="text" id="staffReturnQr" data-qr-input required />
               </label>
               <button type="submit">Accept return</button>
             </form>
           </div>
         </section>
 
+        <section id="scannerSection" class="panel panel--full hidden">
+          <div class="scanner-header">
+            <div>
+              <h3>QR camera scanner</h3>
+              <p class="muted">Autofills whichever QR input is focused. Works for customers and staff.</p>
+            </div>
+            <div class="scanner-controls">
+              <button id="startScannerBtn" type="button">Start camera</button>
+              <button id="stopScannerBtn" type="button" class="ghost">Stop camera</button>
+            </div>
+          </div>
+          <div id="qrScanner" class="scanner"></div>
+          <p id="qrScannerStatus" class="muted">Scanner idle</p>
+        </section>
+
         <section id="messages" class="panel"></section>
       </main>
     </div>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

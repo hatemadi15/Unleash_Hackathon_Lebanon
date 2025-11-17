@@ -57,12 +57,12 @@ The server listens on [http://localhost:4000](http://localhost:4000) and also se
 All endpoints accept/return JSON and honor the business rules described in the spec:
 
 - `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
-- `GET /user/profile`, `GET /user/transactions`
+- `GET /user/profile`, `PUT /user/profile`, `GET /user/transactions`
 - `GET /cafes`, `GET /cafes/:id/inventory`
 - `GET /cups/:cup_id`, `POST /cups/:cup_id/borrow`, `/return`, `/purchase`, `/mark-damaged`
 - Admin endpoints for config, cafés, cups, and overdue processing.
 
-Authentication uses simple JWTs signed via Node's `crypto` module. Passwords are hashed with PBKDF2. The QR content is treated as raw text; if it contains a URL, the backend/front-end extract the final path segment as the `cup_id`.
+Authentication uses simple JWTs signed via Node's `crypto` module. Passwords are hashed with PBKDF2. The QR content is treated as raw text; if it contains a URL, the backend/front-end extract the final path segment as the `cup_id`. Customer profiles now include an optional `profile_image` (stored as a base64 data URL, capped at 500 KB) that can be updated through `PUT /user/profile`.
 
 The `/admin/process-overdue-borrows` endpoint implements the “mark lost” flow: overdue cups become `LOST`, the borrower’s active count is decremented, and the deposit stays locked (simulating the replacement fee).
 
@@ -80,12 +80,13 @@ This shared pipeline keeps the QR workflow simple for the UI while ensuring the 
 Open [http://localhost:4000/](http://localhost:4000/) after starting the backend. The single-page app supports:
 
 - Customer registration/login
-- Viewing deposit balance, reward points, and active borrows
+- Viewing deposit balance, reward points, active borrows, and managing a profile card with custom avatar uploads
 - Borrowing, returning, and keeping cups by pasting a QR string and choosing a café
 - Viewing the latest transactions
 - Café staff login with inventory view plus borrow/return forms that accept customer emails
+- A shared camera-based QR scanner (powered by `html5-qrcode`) that autofills whichever QR input is focused; click “Start camera” and grant permission on localhost/HTTPS
 
-All QR scans are simulated via text inputs. The UI automatically loads the café list from `/cafes` for dropdowns.
+All QR scans can still be simulated via text inputs, and the camera helper is optional. The UI automatically loads the café list from `/cafes` for dropdowns.
 
 ## Notes & future upgrades
 
