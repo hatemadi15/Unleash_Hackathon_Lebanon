@@ -7,11 +7,15 @@ const state = {
   cafes: []
 };
 
+const DEFAULT_MAP_CENTER = [33.8938, 35.5018];
+
 let pendingPhotoClear = false;
 let qrScannerInstance = null;
 let scannerRunning = false;
 let activeQrInput = null;
 let lastScan = '';
+let mapInstance = null;
+let mapMarkers = [];
 
 const els = {
   authSection: document.getElementById('authSection'),
@@ -35,7 +39,11 @@ const els = {
   scannerSection: document.getElementById('scannerSection'),
   startScannerBtn: document.getElementById('startScannerBtn'),
   stopScannerBtn: document.getElementById('stopScannerBtn'),
-  qrScannerStatus: document.getElementById('qrScannerStatus')
+  qrScannerStatus: document.getElementById('qrScannerStatus'),
+  cafeMap: document.getElementById('cafeMap'),
+  cafeList: document.getElementById('cafeList'),
+  routeNearestBtn: document.getElementById('routeNearestBtn'),
+  nearestDirectionsLink: document.getElementById('nearestDirectionsLink')
 };
 
 const qrInputs = Array.from(document.querySelectorAll('[data-qr-input]'));
@@ -77,6 +85,7 @@ function focusTrackingSetup() {
 function populateCafeSelects() {
   const selects = [els.customerBorrowCafe, els.customerReturnCafe, els.staffCafeSelect];
   selects.forEach(select => {
+    if (!select) return;
     select.innerHTML = '';
     state.cafes.forEach(cafe => {
       const option = document.createElement('option');
@@ -87,12 +96,180 @@ function populateCafeSelects() {
   });
 }
 
+function hasCafeCoordinates(cafe) {
+  return (
+    cafe &&
+    typeof cafe.location_lat === 'number' &&
+    !Number.isNaN(cafe.location_lat) &&
+    typeof cafe.location_lng === 'number' &&
+    !Number.isNaN(cafe.location_lng)
+  );
+}
+
+function buildGoogleMapsLink(cafe) {
+  if (hasCafeCoordinates(cafe)) {
+    return `https://www.google.com/maps/search/?api=1&query=${cafe.location_lat},${cafe.location_lng}`;
+  }
+  const query = encodeURIComponent(`${cafe.name || 'ReCup cafe'} ${cafe.address || ''}`.trim());
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
+function ensureMap() {
+  if (!els.cafeMap || typeof L === 'undefined') return false;
+  if (!mapInstance) {
+    mapInstance = L.map('cafeMap', { scrollWheelZoom: false }).setView(DEFAULT_MAP_CENTER, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(mapInstance);
+  }
+  return true;
+}
+
+function updateCafeMap() {
+  if (!ensureMap()) return;
+  mapMarkers.forEach(marker => marker.remove());
+  mapMarkers = [];
+  const cafesWithCoords = state.cafes.filter(hasCafeCoordinates);
+  cafesWithCoords.forEach(cafe => {
+    const marker = L.marker([cafe.location_lat, cafe.location_lng]).addTo(mapInstance);
+    marker.bindPopup(
+      `<strong>${cafe.name}</strong><br>${cafe.address || 'Address coming soon'}<br><a href="${buildGoogleMapsLink(
+        cafe
+      )}" target="_blank" rel="noopener">Open in Google Maps</a>`
+    );
+    mapMarkers.push(marker);
+  });
+  if (cafesWithCoords.length) {
+    const bounds = L.latLngBounds(cafesWithCoords.map(c => [c.location_lat, c.location_lng]));
+    mapInstance.fitBounds(bounds, { padding: [40, 40] });
+  } else {
+    mapInstance.setView(DEFAULT_MAP_CENTER, 12);
+  }
+}
+
+function openDirectionsToCafe(cafe) {
+  const url = buildGoogleMapsLink(cafe);
+  window.open(url, '_blank');
+}
+
+function renderCafeList() {
+  if (!els.cafeList) return;
+  els.cafeList.innerHTML = '';
+  state.cafes.forEach(cafe => {
+    const li = document.createElement('li');
+    const title = document.createElement('strong');
+    title.textContent = cafe.name;
+    const meta = document.createElement('div');
+    meta.className = 'cafe-meta';
+    meta.textContent = cafe.address || 'Address coming soon';
+    const actions = document.createElement('div');
+    actions.className = 'cafe-actions';
+    const link = document.createElement('a');
+    link.href = buildGoogleMapsLink(cafe);
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Open in Google Maps';
+    actions.appendChild(link);
+    if (hasCafeCoordinates(cafe)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ghost';
+      button.textContent = 'Route here';
+      button.addEventListener('click', () => openDirectionsToCafe(cafe));
+      actions.appendChild(button);
+    }
+    li.appendChild(title);
+    li.appendChild(meta);
+    li.appendChild(actions);
+    els.cafeList.appendChild(li);
+  });
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const toRad = deg => (deg * Math.PI) / 180;
+  const R = 6371; // km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function buildDirectionsUrl(origin, cafe) {
+  const destination = hasCafeCoordinates(cafe)
+    ? `${cafe.location_lat},${cafe.location_lng}`
+    : encodeURIComponent(cafe.address || cafe.name || 'ReCup cafe');
+  if (origin) {
+    return `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${destination}`;
+  }
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
+
+function routeToNearestCafe() {
+  if (!navigator.geolocation) {
+    showMessage('Your browser does not support geolocation', 'error');
+    return;
+  }
+  const cafesWithCoords = state.cafes.filter(hasCafeCoordinates);
+  if (!cafesWithCoords.length) {
+    showMessage('Cafés do not have map coordinates yet', 'error');
+    return;
+  }
+  if (els.routeNearestBtn) {
+    els.routeNearestBtn.disabled = true;
+    els.routeNearestBtn.textContent = 'Locating…';
+  }
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      const origin = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const nearest = cafesWithCoords.reduce((closest, cafe) => {
+        const distance = haversineDistance(origin.lat, origin.lng, cafe.location_lat, cafe.location_lng);
+        if (!closest || distance < closest.distance) {
+          return { cafe, distance };
+        }
+        return closest;
+      }, null);
+      if (nearest) {
+        const url = buildDirectionsUrl(origin, nearest.cafe);
+        if (els.nearestDirectionsLink) {
+          els.nearestDirectionsLink.href = url;
+          els.nearestDirectionsLink.textContent = `Directions to ${nearest.cafe.name}`;
+        }
+        window.open(url, '_blank');
+        showMessage(`Nearest café: ${nearest.cafe.name} (${nearest.distance.toFixed(2)} km away)`);
+      }
+      if (els.routeNearestBtn) {
+        els.routeNearestBtn.disabled = false;
+        els.routeNearestBtn.textContent = 'Route to nearest café';
+      }
+    },
+    () => {
+      showMessage('Location permission denied', 'error');
+      if (els.routeNearestBtn) {
+        els.routeNearestBtn.disabled = false;
+        els.routeNearestBtn.textContent = 'Route to nearest café';
+      }
+    }
+  );
+}
+
 async function fetchCafes() {
   try {
     const res = await fetch('/cafes');
     const data = await res.json();
     state.cafes = data.cafes || [];
     populateCafeSelects();
+    updateCafeMap();
+    renderCafeList();
+    if (els.nearestDirectionsLink) {
+      const fallbackCafe = state.cafes[0];
+      els.nearestDirectionsLink.href = fallbackCafe ? buildGoogleMapsLink(fallbackCafe) : 'https://maps.google.com';
+      els.nearestDirectionsLink.textContent = fallbackCafe
+        ? `Google Maps: ${fallbackCafe.name}`
+        : 'Google Maps link';
+    }
   } catch (err) {
     console.error('Failed to load cafes', err);
   }
@@ -543,6 +720,9 @@ function attachEventListeners() {
   }
   if (els.stopScannerBtn) {
     els.stopScannerBtn.addEventListener('click', () => stopScanner());
+  }
+  if (els.routeNearestBtn) {
+    els.routeNearestBtn.addEventListener('click', routeToNearestCafe);
   }
   els.logoutBtn.addEventListener('click', () => {
     setAuth(null, null);

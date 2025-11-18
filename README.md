@@ -85,6 +85,7 @@ Open [http://localhost:4000/](http://localhost:4000/) after starting the backend
 - Viewing the latest transactions
 - Café staff login with inventory view plus borrow/return forms that accept customer emails
 - A shared camera-based QR scanner (powered by `html5-qrcode`) that autofills whichever QR input is focused; click “Start camera” and grant permission on localhost/HTTPS
+- A Leaflet map that plots every partner café with Google Maps links plus a "Route to nearest café" button that asks for browser geolocation and opens the best match directly in Google Maps
 
 All QR scans can still be simulated via text inputs, and the camera helper is optional. The UI automatically loads the café list from `/cafes` for dropdowns.
 
@@ -93,4 +94,4 @@ All QR scans can still be simulated via text inputs, and the camera helper is op
 - Swapping the file-based persistence with PostgreSQL/SQLite would only require reimplementing `db.js` with a real ORM/driver; the rest of the API already matches the relational schema.
 - Business rules (limits, deposits, overdue handling, rewards) are fully driven by the `config` key/value table exposed to admins.
 - For clarity, overdue returns processed *before* the admin task still refund deposits and award rewards. Once `/admin/process-overdue-borrows` marks a cup as lost, the deposit stays withheld.
-- The code intentionally avoids external dependencies due to the offline constraints. In a full deployment, Express, a proper migration tool, and a production-ready auth library are recommended.
+- The code intentionally avoids external dependencies due to the offline constraints. In a full deployment, Express, a proper migration tool, and a production-ready auth library are recommended. The frontend relies on CDN-hosted Leaflet and html5-qrcode for the map and scanner; keep an eye on CSP settings if you later self-host those assets.

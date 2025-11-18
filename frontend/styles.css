@@ -118,6 +118,69 @@ button:disabled {
   backdrop-filter: blur(10px);
 }
 
+.map-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.map-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.map {
+  width: 100%;
+  height: 360px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.cafe-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.cafe-list li {
+  background: rgba(15, 23, 42, 0.03);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.cafe-list strong {
+  font-size: 1rem;
+}
+
+.cafe-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cafe-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cafe-actions a {
+  text-decoration: none;
+  font-weight: 600;
+}
+
 .panel h2,
 .panel h3 {
   margin-top: 0;

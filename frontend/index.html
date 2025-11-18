@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <title>ReCup Lebanon | Reusable Cup Network</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-sA+e2atTH0JQdM8TbHuYkM5QY+1p2u1hb3g9LMRgPJM="
+      crossorigin=""
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -23,6 +29,26 @@
       </header>
 
       <main class="panel-grid">
+        <section id="mapSection" class="panel panel--full">
+          <div class="map-header">
+            <div>
+              <h2>Partner cafés map</h2>
+              <p class="muted">
+                Explore the ReCup network and jump to Google Maps for walking or driving
+                directions.
+              </p>
+            </div>
+            <div class="map-controls">
+              <button id="routeNearestBtn" type="button">Route to nearest café</button>
+              <a id="nearestDirectionsLink" class="ghost" target="_blank" rel="noopener"
+                >Google Maps link</a
+              >
+            </div>
+          </div>
+          <div id="cafeMap" class="map"></div>
+          <ul id="cafeList" class="cafe-list"></ul>
+        </section>
+
         <section id="authSection" class="panel-grid two-col">
           <div class="panel">
             <h2>Join ReCup</h2>
@@ -186,6 +212,11 @@
       </main>
     </div>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-o9N1j7kGStb8gZGLwZbjrjUBP7BjH0zEtnNk3y+3F3s="
+      crossorigin=""
+    ></script>
     <script src="/app.js"></script>
   </body>
 </html>
