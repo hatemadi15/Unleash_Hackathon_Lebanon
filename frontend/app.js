@@ -7,15 +7,18 @@ const state = {
   cafes: []
 };
 
-const DEFAULT_MAP_CENTER = [33.8938, 35.5018];
+const MAP_VIEWBOX = { width: 800, height: 500 };
+const MAP_DEFAULT_BOUNDS = {
+  lat: { min: 33.0, max: 34.6 },
+  lng: { min: 35.0, max: 36.8 }
+};
 
 let pendingPhotoClear = false;
 let qrScannerInstance = null;
 let scannerRunning = false;
 let activeQrInput = null;
 let lastScan = '';
-let mapInstance = null;
-let mapMarkers = [];
+let mapRenderer = null;
 
 const els = {
   authSection: document.getElementById('authSection'),
@@ -114,37 +117,164 @@ function buildGoogleMapsLink(cafe) {
   return `https://www.google.com/maps/search/?api=1&query=${query}`;
 }
 
-function ensureMap() {
-  if (!els.cafeMap || typeof L === 'undefined') return false;
-  if (!mapInstance) {
-    mapInstance = L.map('cafeMap', { scrollWheelZoom: false }).setView(DEFAULT_MAP_CENTER, 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(mapInstance);
+function ensureMapRenderer() {
+  if (!els.cafeMap) return null;
+  if (!mapRenderer) {
+    mapRenderer = createMiniMapRenderer(els.cafeMap);
   }
-  return true;
+  return mapRenderer;
 }
 
 function updateCafeMap() {
-  if (!ensureMap()) return;
-  mapMarkers.forEach(marker => marker.remove());
-  mapMarkers = [];
-  const cafesWithCoords = state.cafes.filter(hasCafeCoordinates);
-  cafesWithCoords.forEach(cafe => {
-    const marker = L.marker([cafe.location_lat, cafe.location_lng]).addTo(mapInstance);
-    marker.bindPopup(
-      `<strong>${cafe.name}</strong><br>${cafe.address || 'Address coming soon'}<br><a href="${buildGoogleMapsLink(
-        cafe
-      )}" target="_blank" rel="noopener">Open in Google Maps</a>`
-    );
-    mapMarkers.push(marker);
-  });
-  if (cafesWithCoords.length) {
-    const bounds = L.latLngBounds(cafesWithCoords.map(c => [c.location_lat, c.location_lng]));
-    mapInstance.fitBounds(bounds, { padding: [40, 40] });
-  } else {
-    mapInstance.setView(DEFAULT_MAP_CENTER, 12);
+  const renderer = ensureMapRenderer();
+  if (!renderer) return;
+  renderer.updateMarkers(state.cafes.filter(hasCafeCoordinates));
+}
+
+function createMiniMapRenderer(container) {
+  const mapRoot = container;
+  mapRoot.innerHTML = '';
+  mapRoot.classList.add('mini-map');
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${MAP_VIEWBOX.width} ${MAP_VIEWBOX.height}`);
+  svg.classList.add('mini-map__canvas');
+
+  const defs = document.createElementNS(svgNS, 'defs');
+  const gradient = document.createElementNS(svgNS, 'linearGradient');
+  gradient.setAttribute('id', 'miniMapGradient');
+  gradient.setAttribute('x1', '0%');
+  gradient.setAttribute('y1', '0%');
+  gradient.setAttribute('x2', '0%');
+  gradient.setAttribute('y2', '100%');
+
+  const stop1 = document.createElementNS(svgNS, 'stop');
+  stop1.setAttribute('offset', '0%');
+  stop1.setAttribute('stop-color', '#c7f9cc');
+  stop1.setAttribute('stop-opacity', '0.9');
+  gradient.appendChild(stop1);
+
+  const stop2 = document.createElementNS(svgNS, 'stop');
+  stop2.setAttribute('offset', '100%');
+  stop2.setAttribute('stop-color', '#80ed99');
+  stop2.setAttribute('stop-opacity', '0.9');
+  gradient.appendChild(stop2);
+
+  defs.appendChild(gradient);
+  svg.appendChild(defs);
+
+  const background = document.createElementNS(svgNS, 'rect');
+  background.setAttribute('width', MAP_VIEWBOX.width);
+  background.setAttribute('height', MAP_VIEWBOX.height);
+  background.setAttribute('fill', 'url(#miniMapGradient)');
+  svg.appendChild(background);
+
+  const gridGroup = document.createElementNS(svgNS, 'g');
+  gridGroup.setAttribute('stroke', 'rgba(15, 23, 42, 0.08)');
+  gridGroup.setAttribute('stroke-width', '1');
+  const columns = 6;
+  const rows = 4;
+  for (let i = 1; i < columns; i += 1) {
+    const line = document.createElementNS(svgNS, 'line');
+    const x = (MAP_VIEWBOX.width / columns) * i;
+    line.setAttribute('x1', x);
+    line.setAttribute('y1', 0);
+    line.setAttribute('x2', x);
+    line.setAttribute('y2', MAP_VIEWBOX.height);
+    gridGroup.appendChild(line);
   }
+  for (let j = 1; j < rows; j += 1) {
+    const line = document.createElementNS(svgNS, 'line');
+    const y = (MAP_VIEWBOX.height / rows) * j;
+    line.setAttribute('x1', 0);
+    line.setAttribute('y1', y);
+    line.setAttribute('x2', MAP_VIEWBOX.width);
+    line.setAttribute('y2', y);
+    gridGroup.appendChild(line);
+  }
+  svg.appendChild(gridGroup);
+
+  const markerLayer = document.createElement('div');
+  markerLayer.className = 'mini-map__markers';
+
+  const emptyState = document.createElement('p');
+  emptyState.className = 'mini-map__empty';
+  emptyState.textContent = 'Add café coordinates to populate this map.';
+
+  mapRoot.appendChild(svg);
+  mapRoot.appendChild(markerLayer);
+  mapRoot.appendChild(emptyState);
+
+  let bounds = MAP_DEFAULT_BOUNDS;
+  let markerMap = new Map();
+
+  function latLngToPoint(lat, lng) {
+    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+    const latSpan = bounds.lat.max - bounds.lat.min || 1;
+    const lngSpan = bounds.lng.max - bounds.lng.min || 1;
+    const clampedLat = Math.min(Math.max(lat, bounds.lat.min), bounds.lat.max);
+    const clampedLng = Math.min(Math.max(lng, bounds.lng.min), bounds.lng.max);
+    const xRatio = (clampedLng - bounds.lng.min) / lngSpan;
+    const yRatio = (clampedLat - bounds.lat.min) / latSpan;
+    return {
+      x: xRatio * MAP_VIEWBOX.width,
+      y: MAP_VIEWBOX.height - yRatio * MAP_VIEWBOX.height
+    };
+  }
+
+  function updateBounds(cafes) {
+    if (!cafes.length) {
+      bounds = MAP_DEFAULT_BOUNDS;
+      return;
+    }
+    const latValues = cafes.map(c => c.location_lat);
+    const lngValues = cafes.map(c => c.location_lng);
+    const paddingLat = 0.05;
+    const paddingLng = 0.05;
+    bounds = {
+      lat: {
+        min: Math.min(...latValues) - paddingLat,
+        max: Math.max(...latValues) + paddingLat
+      },
+      lng: {
+        min: Math.min(...lngValues) - paddingLng,
+        max: Math.max(...lngValues) + paddingLng
+      }
+    };
+  }
+
+  function renderMarkers(cafes) {
+    markerLayer.innerHTML = '';
+    markerMap = new Map();
+    cafes.forEach(cafe => {
+      const point = latLngToPoint(cafe.location_lat, cafe.location_lng);
+      if (!point) return;
+      const marker = document.createElement('button');
+      marker.type = 'button';
+      marker.className = 'mini-map__marker';
+      marker.style.left = `${point.x}px`;
+      marker.style.top = `${point.y}px`;
+      marker.title = cafe.name || 'ReCup café';
+      marker.dataset.cafeId = cafe.id;
+      marker.addEventListener('click', () => openDirectionsToCafe(cafe));
+      markerLayer.appendChild(marker);
+      markerMap.set(cafe.id, marker);
+    });
+    emptyState.style.display = cafes.length ? 'none' : 'block';
+  }
+
+  return {
+    updateMarkers(cafes) {
+      updateBounds(cafes);
+      renderMarkers(cafes);
+    },
+    highlight(cafeId) {
+      markerMap.forEach((marker, id) => {
+        marker.classList.toggle('is-active', Boolean(cafeId && id === cafeId));
+      });
+    }
+  };
 }
 
 function openDirectionsToCafe(cafe) {
@@ -157,6 +287,11 @@ function renderCafeList() {
   els.cafeList.innerHTML = '';
   state.cafes.forEach(cafe => {
     const li = document.createElement('li');
+    li.tabIndex = 0;
+    li.addEventListener('mouseenter', () => highlightMapMarker(cafe.id));
+    li.addEventListener('focusin', () => highlightMapMarker(cafe.id));
+    li.addEventListener('mouseleave', () => highlightMapMarker(null));
+    li.addEventListener('focusout', () => highlightMapMarker(null));
     const title = document.createElement('strong');
     title.textContent = cafe.name;
     const meta = document.createElement('div');
@@ -237,6 +372,7 @@ function routeToNearestCafe() {
           els.nearestDirectionsLink.href = url;
           els.nearestDirectionsLink.textContent = `Directions to ${nearest.cafe.name}`;
         }
+        highlightMapMarker(nearest.cafe.id);
         window.open(url, '_blank');
         showMessage(`Nearest café: ${nearest.cafe.name} (${nearest.distance.toFixed(2)} km away)`);
       }
@@ -253,6 +389,12 @@ function routeToNearestCafe() {
       }
     }
   );
+}
+
+function highlightMapMarker(cafeId) {
+  if (mapRenderer) {
+    mapRenderer.highlight(cafeId);
+  }
 }
 
 async function fetchCafes() {
