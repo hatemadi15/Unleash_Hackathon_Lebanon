@@ -246,7 +246,19 @@ class CafeTileMap {
     });
   }
 
+  isInteractiveTarget(target) {
+    if (!target) return false;
+    return Boolean(
+      target.closest('.tile-map__control') ||
+        target.closest('.tile-map__popup') ||
+        target.closest('.map-marker')
+    );
+  }
+
   handlePointerDown(evt) {
+    if ((evt.button !== undefined && evt.button !== 0) || this.isInteractiveTarget(evt.target)) {
+      return;
+    }
     this.isDragging = true;
     this.dragPointerId = evt.pointerId;
     this.container.classList.add('is-dragging');

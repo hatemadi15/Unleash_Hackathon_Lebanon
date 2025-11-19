@@ -132,6 +132,20 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.map-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 420px;
+}
+
 .map-controls {
   display: flex;
   gap: 12px;
@@ -140,7 +154,9 @@ button:disabled {
 
 .map {
   width: 100%;
-  height: 420px;
+  flex: 1 1 auto;
+  min-height: 360px;
+  height: clamp(360px, 55vh, 560px);
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -250,6 +266,16 @@ button:disabled {
   background: rgba(255, 255, 255, 0.7);
 }
 
+.map-sidebar {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+  position: sticky;
+  top: 20px;
+}
+
 .map-popup {
   min-width: 220px;
 }
@@ -284,6 +310,13 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
+}
+
+.map-sidebar .cafe-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 480px;
+  overflow-y: auto;
 }
 
 .cafe-list li {
@@ -556,6 +589,16 @@ textarea:focus {
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 4px;
+}
+
+@media (max-width: 960px) {
+  .map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .map-sidebar {
+    position: static;
+  }
 }
 
 @media (max-width: 640px) {

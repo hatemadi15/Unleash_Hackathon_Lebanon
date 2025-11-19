@@ -39,9 +39,19 @@
               >
             </div>
           </div>
-          <div id="cafeMap" class="map"></div>
-          <p id="mapEmptyState" class="map-empty hidden">Add café coordinates to populate this map.</p>
-          <ul id="cafeList" class="cafe-list"></ul>
+          <div class="map-layout">
+            <div class="map-wrapper">
+              <div id="cafeMap" class="map"></div>
+              <p id="mapEmptyState" class="map-empty hidden">
+                Add café coordinates to populate this map.
+              </p>
+            </div>
+            <aside class="map-sidebar">
+              <h3>Partner cafés</h3>
+              <p class="muted">Tap a café to highlight it on the map.</p>
+              <ul id="cafeList" class="cafe-list"></ul>
+            </aside>
+          </div>
         </section>
 
         <section id="authSection" class="panel-grid two-col">
