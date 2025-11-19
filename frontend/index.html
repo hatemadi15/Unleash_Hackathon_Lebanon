@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <title>ReCup Lebanon | Reusable Cup Network</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-sA+4J4J2zj7XN5n00M2J9zpzpsZ1mO8zELTCD1Jwk0M="
+      crossorigin=""
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -40,6 +46,7 @@
             </div>
           </div>
           <div id="cafeMap" class="map"></div>
+          <p id="mapEmptyState" class="map-empty hidden">Add café coordinates to populate this map.</p>
           <ul id="cafeList" class="cafe-list"></ul>
         </section>
 
@@ -115,7 +122,17 @@
               </label>
               <label>
                 QR / Cup ID
-                <input type="text" id="customerBorrowQr" placeholder="Paste QR string" data-qr-input data-scan-default="true" required />
+                <input
+                  type="text"
+                  id="customerBorrowQr"
+                  placeholder="Scan cup QR"
+                  data-qr-input
+                  data-scan-default="true"
+                  inputmode="none"
+                  readonly
+                  required
+                />
+                <small class="input-hint">Use the QR scanner below to capture the cup ID.</small>
               </label>
               <button type="submit">Borrow cup</button>
             </form>
@@ -129,7 +146,16 @@
               </label>
               <label>
                 QR / Cup ID
-                <input type="text" id="customerReturnQr" placeholder="Paste QR string" data-qr-input required />
+                <input
+                  type="text"
+                  id="customerReturnQr"
+                  placeholder="Scan cup QR"
+                  data-qr-input
+                  inputmode="none"
+                  readonly
+                  required
+                />
+                <small class="input-hint">Point the scanner at the cup QR.</small>
               </label>
               <button type="submit">Return cup</button>
             </form>
@@ -139,7 +165,16 @@
             <form id="customerPurchaseForm" class="form-grid">
               <label>
                 QR / Cup ID
-                <input type="text" id="customerPurchaseQr" placeholder="Paste QR string" data-qr-input required />
+                <input
+                  type="text"
+                  id="customerPurchaseQr"
+                  placeholder="Scan cup QR"
+                  data-qr-input
+                  inputmode="none"
+                  readonly
+                  required
+                />
+                <small class="input-hint">Scans fill this field automatically.</small>
               </label>
               <button type="submit">Keep cup</button>
             </form>
@@ -170,7 +205,8 @@
               </label>
               <label>
                 Cup QR / ID
-                <input type="text" id="staffBorrowQr" data-qr-input required />
+                <input type="text" id="staffBorrowQr" data-qr-input inputmode="none" readonly required />
+                <small class="input-hint">Scan the customer’s cup QR.</small>
               </label>
               <button type="submit">Borrow cup</button>
             </form>
@@ -180,7 +216,8 @@
             <form id="staffReturnForm" class="form-grid">
               <label>
                 Cup QR / ID
-                <input type="text" id="staffReturnQr" data-qr-input required />
+                <input type="text" id="staffReturnQr" data-qr-input inputmode="none" readonly required />
+                <small class="input-hint">Scan the QR to accept the return.</small>
               </label>
               <button type="submit">Accept return</button>
             </form>
@@ -205,6 +242,11 @@
         <section id="messages" class="panel"></section>
       </main>
     </div>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    ></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="/app.js"></script>
   </body>

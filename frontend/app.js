@@ -7,18 +7,15 @@ const state = {
   cafes: []
 };
 
-const MAP_VIEWBOX = { width: 800, height: 500 };
-const MAP_DEFAULT_BOUNDS = {
-  lat: { min: 33.0, max: 34.6 },
-  lng: { min: 35.0, max: 36.8 }
-};
-
 let pendingPhotoClear = false;
 let qrScannerInstance = null;
 let scannerRunning = false;
 let activeQrInput = null;
 let lastScan = '';
-let mapRenderer = null;
+let leafletMap = null;
+let markerLayer = null;
+let markerRefs = new Map();
+let activeMarkerId = null;
 
 const els = {
   authSection: document.getElementById('authSection'),
@@ -46,7 +43,8 @@ const els = {
   cafeMap: document.getElementById('cafeMap'),
   cafeList: document.getElementById('cafeList'),
   routeNearestBtn: document.getElementById('routeNearestBtn'),
-  nearestDirectionsLink: document.getElementById('nearestDirectionsLink')
+  nearestDirectionsLink: document.getElementById('nearestDirectionsLink'),
+  mapEmptyState: document.getElementById('mapEmptyState')
 };
 
 const qrInputs = Array.from(document.querySelectorAll('[data-qr-input]'));
@@ -117,164 +115,89 @@ function buildGoogleMapsLink(cafe) {
   return `https://www.google.com/maps/search/?api=1&query=${query}`;
 }
 
-function ensureMapRenderer() {
+function escapeHtml(value) {
+  const safeValue = value === undefined || value === null ? '' : String(value);
+  return safeValue
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function ensureLeafletMap() {
   if (!els.cafeMap) return null;
-  if (!mapRenderer) {
-    mapRenderer = createMiniMapRenderer(els.cafeMap);
+  if (leafletMap) return leafletMap;
+  if (typeof L === 'undefined') {
+    console.warn('Leaflet has not loaded yet');
+    return null;
   }
-  return mapRenderer;
+  leafletMap = L.map(els.cafeMap, {
+    zoomControl: true,
+    scrollWheelZoom: false,
+    attributionControl: true
+  });
+  const defaultView = [33.8938, 35.5018];
+  leafletMap.setView(defaultView, 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(leafletMap);
+  markerLayer = L.layerGroup().addTo(leafletMap);
+  return leafletMap;
+}
+
+function buildCafePopupHtml(cafe) {
+  const safeName = escapeHtml(cafe.name || 'ReCup café');
+  const safeAddress = escapeHtml(cafe.address || 'Address coming soon');
+  const mapsLink = buildGoogleMapsLink(cafe);
+  const directionsLink = buildDirectionsUrl(null, cafe);
+  return `
+    <div class="map-popup">
+      <strong>${safeName}</strong>
+      <p>${safeAddress}</p>
+      <div class="map-popup__actions">
+        <a href="${mapsLink}" target="_blank" rel="noopener">Open in Google Maps</a>
+        <a href="${directionsLink}" target="_blank" rel="noopener">Directions</a>
+      </div>
+    </div>
+  `;
 }
 
 function updateCafeMap() {
-  const renderer = ensureMapRenderer();
-  if (!renderer) return;
-  renderer.updateMarkers(state.cafes.filter(hasCafeCoordinates));
-}
-
-function createMiniMapRenderer(container) {
-  const mapRoot = container;
-  mapRoot.innerHTML = '';
-  mapRoot.classList.add('mini-map');
-
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${MAP_VIEWBOX.width} ${MAP_VIEWBOX.height}`);
-  svg.classList.add('mini-map__canvas');
-
-  const defs = document.createElementNS(svgNS, 'defs');
-  const gradient = document.createElementNS(svgNS, 'linearGradient');
-  gradient.setAttribute('id', 'miniMapGradient');
-  gradient.setAttribute('x1', '0%');
-  gradient.setAttribute('y1', '0%');
-  gradient.setAttribute('x2', '0%');
-  gradient.setAttribute('y2', '100%');
-
-  const stop1 = document.createElementNS(svgNS, 'stop');
-  stop1.setAttribute('offset', '0%');
-  stop1.setAttribute('stop-color', '#c7f9cc');
-  stop1.setAttribute('stop-opacity', '0.9');
-  gradient.appendChild(stop1);
-
-  const stop2 = document.createElementNS(svgNS, 'stop');
-  stop2.setAttribute('offset', '100%');
-  stop2.setAttribute('stop-color', '#80ed99');
-  stop2.setAttribute('stop-opacity', '0.9');
-  gradient.appendChild(stop2);
-
-  defs.appendChild(gradient);
-  svg.appendChild(defs);
-
-  const background = document.createElementNS(svgNS, 'rect');
-  background.setAttribute('width', MAP_VIEWBOX.width);
-  background.setAttribute('height', MAP_VIEWBOX.height);
-  background.setAttribute('fill', 'url(#miniMapGradient)');
-  svg.appendChild(background);
-
-  const gridGroup = document.createElementNS(svgNS, 'g');
-  gridGroup.setAttribute('stroke', 'rgba(15, 23, 42, 0.08)');
-  gridGroup.setAttribute('stroke-width', '1');
-  const columns = 6;
-  const rows = 4;
-  for (let i = 1; i < columns; i += 1) {
-    const line = document.createElementNS(svgNS, 'line');
-    const x = (MAP_VIEWBOX.width / columns) * i;
-    line.setAttribute('x1', x);
-    line.setAttribute('y1', 0);
-    line.setAttribute('x2', x);
-    line.setAttribute('y2', MAP_VIEWBOX.height);
-    gridGroup.appendChild(line);
+  const map = ensureLeafletMap();
+  const cafesWithCoords = state.cafes.filter(hasCafeCoordinates);
+  if (els.mapEmptyState) {
+    els.mapEmptyState.classList.toggle('hidden', Boolean(cafesWithCoords.length));
   }
-  for (let j = 1; j < rows; j += 1) {
-    const line = document.createElementNS(svgNS, 'line');
-    const y = (MAP_VIEWBOX.height / rows) * j;
-    line.setAttribute('x1', 0);
-    line.setAttribute('y1', y);
-    line.setAttribute('x2', MAP_VIEWBOX.width);
-    line.setAttribute('y2', y);
-    gridGroup.appendChild(line);
+  if (!map || !markerLayer) return;
+  markerLayer.clearLayers();
+  markerRefs = new Map();
+  activeMarkerId = null;
+  if (!cafesWithCoords.length) {
+    map.setView([33.8938, 35.5018], 11);
+    return;
   }
-  svg.appendChild(gridGroup);
-
-  const markerLayer = document.createElement('div');
-  markerLayer.className = 'mini-map__markers';
-
-  const emptyState = document.createElement('p');
-  emptyState.className = 'mini-map__empty';
-  emptyState.textContent = 'Add café coordinates to populate this map.';
-
-  mapRoot.appendChild(svg);
-  mapRoot.appendChild(markerLayer);
-  mapRoot.appendChild(emptyState);
-
-  let bounds = MAP_DEFAULT_BOUNDS;
-  let markerMap = new Map();
-
-  function latLngToPoint(lat, lng) {
-    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-    const latSpan = bounds.lat.max - bounds.lat.min || 1;
-    const lngSpan = bounds.lng.max - bounds.lng.min || 1;
-    const clampedLat = Math.min(Math.max(lat, bounds.lat.min), bounds.lat.max);
-    const clampedLng = Math.min(Math.max(lng, bounds.lng.min), bounds.lng.max);
-    const xRatio = (clampedLng - bounds.lng.min) / lngSpan;
-    const yRatio = (clampedLat - bounds.lat.min) / latSpan;
-    return {
-      x: xRatio * MAP_VIEWBOX.width,
-      y: MAP_VIEWBOX.height - yRatio * MAP_VIEWBOX.height
-    };
-  }
-
-  function updateBounds(cafes) {
-    if (!cafes.length) {
-      bounds = MAP_DEFAULT_BOUNDS;
-      return;
-    }
-    const latValues = cafes.map(c => c.location_lat);
-    const lngValues = cafes.map(c => c.location_lng);
-    const paddingLat = 0.05;
-    const paddingLng = 0.05;
-    bounds = {
-      lat: {
-        min: Math.min(...latValues) - paddingLat,
-        max: Math.max(...latValues) + paddingLat
-      },
-      lng: {
-        min: Math.min(...lngValues) - paddingLng,
-        max: Math.max(...lngValues) + paddingLng
-      }
-    };
-  }
-
-  function renderMarkers(cafes) {
-    markerLayer.innerHTML = '';
-    markerMap = new Map();
-    cafes.forEach(cafe => {
-      const point = latLngToPoint(cafe.location_lat, cafe.location_lng);
-      if (!point) return;
-      const marker = document.createElement('button');
-      marker.type = 'button';
-      marker.className = 'mini-map__marker';
-      marker.style.left = `${point.x}px`;
-      marker.style.top = `${point.y}px`;
-      marker.title = cafe.name || 'ReCup café';
-      marker.dataset.cafeId = cafe.id;
-      marker.addEventListener('click', () => openDirectionsToCafe(cafe));
-      markerLayer.appendChild(marker);
-      markerMap.set(cafe.id, marker);
+  const bounds = L.latLngBounds([]);
+  cafesWithCoords.forEach(cafe => {
+    const coords = [cafe.location_lat, cafe.location_lng];
+    bounds.extend(coords);
+    const marker = L.marker(coords, { title: cafe.name || 'ReCup café' });
+    marker.bindPopup(buildCafePopupHtml(cafe));
+    marker.on('click', () => {
+      activeMarkerId = cafe.id;
     });
-    emptyState.style.display = cafes.length ? 'none' : 'block';
+    marker.on('popupclose', () => {
+      if (activeMarkerId === cafe.id) {
+        activeMarkerId = null;
+      }
+    });
+    marker.addTo(markerLayer);
+    markerRefs.set(cafe.id, marker);
+  });
+  if (bounds.isValid()) {
+    map.fitBounds(bounds.pad(0.25));
   }
-
-  return {
-    updateMarkers(cafes) {
-      updateBounds(cafes);
-      renderMarkers(cafes);
-    },
-    highlight(cafeId) {
-      markerMap.forEach((marker, id) => {
-        marker.classList.toggle('is-active', Boolean(cafeId && id === cafeId));
-      });
-    }
-  };
 }
 
 function openDirectionsToCafe(cafe) {
@@ -392,8 +315,22 @@ function routeToNearestCafe() {
 }
 
 function highlightMapMarker(cafeId) {
-  if (mapRenderer) {
-    mapRenderer.highlight(cafeId);
+  if (!leafletMap || !markerRefs.size) return;
+  if (!cafeId) {
+    if (activeMarkerId && markerRefs.get(activeMarkerId)) {
+      markerRefs.get(activeMarkerId).closePopup();
+    }
+    activeMarkerId = null;
+    return;
+  }
+  const marker = markerRefs.get(cafeId);
+  if (marker) {
+    marker.openPopup();
+    const point = marker.getLatLng();
+    if (point) {
+      leafletMap.panTo(point, { animate: true });
+    }
+    activeMarkerId = cafeId;
   }
 }
 
@@ -465,7 +402,7 @@ function updateUI() {
     els.customerSection.classList.add('hidden');
     els.staffSection.classList.add('hidden');
     els.logoutBtn.classList.add('hidden');
-    els.customerInfo.textContent = '';
+    els.customerInfo.innerHTML = '';
     els.staffInfo.textContent = '';
     els.transactionList.innerHTML = '';
     pendingPhotoClear = false;
@@ -487,7 +424,18 @@ function setAuth(token, user) {
 }
 
 function formatProfile(user) {
-  return `Balance: $${(user.deposit_balance || 0).toFixed(2)} • Points: ${user.reward_points || 0} • Active borrows: ${user.active_borrow_count || 0}`;
+  const stats = [
+    { label: 'Balance', value: `$${(user.deposit_balance || 0).toFixed(2)}` },
+    { label: 'Points', value: user.reward_points || 0 },
+    { label: 'Active borrows', value: user.active_borrow_count || 0 }
+  ];
+  return stats
+    .map(stat => {
+      const label = escapeHtml(stat.label);
+      const value = escapeHtml(stat.value);
+      return `<span class="stat-chip"><span class="stat-chip__label">${label}</span><span class="stat-chip__value">${value}</span></span>`;
+    })
+    .join('');
 }
 
 function setAvatarSrc(src) {
@@ -506,7 +454,7 @@ function updateProfileCard() {
     els.profileNameInput.value = state.user.name || '';
   }
   if (els.customerInfo) {
-    els.customerInfo.textContent = formatProfile(state.user);
+    els.customerInfo.innerHTML = formatProfile(state.user);
   }
   pendingPhotoClear = false;
 }
