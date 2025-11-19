@@ -32,10 +32,23 @@ const FALLBACK_CAFES = [
   }
 ];
 
+const ECO_STORAGE_KEY = 'recup_eco_stats';
+const ECO_CONFIG = {
+  targetCycles: 40,
+  co2PerCycleKg: 0.08,
+  waterPerCycleL: 0.5,
+  landfillCupsPerCycle: 1
+};
+const ECO_DEFAULT_STATS = {
+  customer: { borrows: 0, returns: 0 },
+  cafe: { borrows: 0, returns: 0 }
+};
+
 const state = {
   token: localStorage.getItem('recup_token') || null,
   user: null,
-  cafes: []
+  cafes: [],
+  ecoStats: loadEcoStats()
 };
 
 let pendingPhotoClear = false;
@@ -72,7 +85,15 @@ const els = {
   cafeList: document.getElementById('cafeList'),
   routeNearestBtn: document.getElementById('routeNearestBtn'),
   nearestDirectionsLink: document.getElementById('nearestDirectionsLink'),
-  mapEmptyState: document.getElementById('mapEmptyState')
+  mapEmptyState: document.getElementById('mapEmptyState'),
+  customerEcoMetrics: document.getElementById('customerEcoMetrics'),
+  customerEcoNarrative: document.getElementById('customerEcoNarrative'),
+  customerTreeFill: document.getElementById('customerTreeFill'),
+  customerTreePercent: document.getElementById('customerTreePercent'),
+  cafeEcoMetrics: document.getElementById('cafeEcoMetrics'),
+  cafeEcoNarrative: document.getElementById('cafeEcoNarrative'),
+  cafeTreeFill: document.getElementById('cafeTreeFill'),
+  cafeTreePercent: document.getElementById('cafeTreePercent')
 };
 
 const qrInputs = Array.from(document.querySelectorAll('[data-qr-input]'));
@@ -80,6 +101,129 @@ const defaultScanInput = document.querySelector('[data-scan-default="true"]');
 if (els.profileAvatar) {
   els.profileAvatar.src = DEFAULT_AVATAR;
 }
+
+function cloneEcoDefaults() {
+  return {
+    customer: Object.assign({}, ECO_DEFAULT_STATS.customer),
+    cafe: Object.assign({}, ECO_DEFAULT_STATS.cafe)
+  };
+}
+
+function loadEcoStats() {
+  try {
+    const stored = localStorage.getItem(ECO_STORAGE_KEY);
+    if (!stored) {
+      return cloneEcoDefaults();
+    }
+    const parsed = JSON.parse(stored);
+    return {
+      customer: Object.assign({}, ECO_DEFAULT_STATS.customer, parsed.customer),
+      cafe: Object.assign({}, ECO_DEFAULT_STATS.cafe, parsed.cafe)
+    };
+  } catch (err) {
+    console.warn('Unable to load eco stats, resetting to defaults', err);
+    return cloneEcoDefaults();
+  }
+}
+
+function saveEcoStats() {
+  try {
+    localStorage.setItem(ECO_STORAGE_KEY, JSON.stringify(state.ecoStats));
+  } catch (err) {
+    console.warn('Unable to persist eco stats', err);
+  }
+}
+
+function calculateEcoMetrics(stats = { borrows: 0, returns: 0 }) {
+  const borrows = Number(stats.borrows || 0);
+  const returns = Number(stats.returns || 0);
+  const completedCycles = Math.max(0, Math.min(borrows, returns));
+  const cupsDiverted = completedCycles * ECO_CONFIG.landfillCupsPerCycle;
+  const co2SavedKg = completedCycles * ECO_CONFIG.co2PerCycleKg;
+  const waterSavedL = completedCycles * ECO_CONFIG.waterPerCycleL;
+  const progressPercent = Math.min(100, Math.round((completedCycles / ECO_CONFIG.targetCycles) * 100));
+  return {
+    cycles: completedCycles,
+    cupsDiverted,
+    co2SavedKg,
+    waterSavedL,
+    progressPercent
+  };
+}
+
+function buildEcoMetricsMarkup(metrics) {
+  const items = [
+    { label: 'Cycles completed', value: metrics.cycles },
+    { label: 'Cups rescued', value: metrics.cupsDiverted },
+    { label: 'CO₂ saved', value: `${metrics.co2SavedKg.toFixed(2)} kg` },
+    { label: 'Water saved', value: `${metrics.waterSavedL.toFixed(1)} L` }
+  ];
+  return items
+    .map(item => {
+      const label = escapeHtml(item.label);
+      const value = escapeHtml(String(item.value));
+      return `<li class="eco-metric"><span class="eco-metric__label">${label}</span><span class="eco-metric__value">${value}</span></li>`;
+    })
+    .join('');
+}
+
+function buildEcoNarrative(scope, metrics) {
+  const actorName = state.user && state.user.name ? state.user.name : scope === 'customer' ? 'You' : 'Your team';
+  if (!metrics.cycles) {
+    return `${actorName} can grow this tree by completing a full borrow & return cycle.`;
+  }
+  const cupsText = metrics.cupsDiverted === 1 ? 'cup' : 'cups';
+  return `${actorName} kept ${metrics.cupsDiverted} single-use ${cupsText} in circulation and filled this tree to ${metrics.progressPercent}%.`;
+}
+
+function updateEcoDashboard(scope, refs) {
+  if (!state.ecoStats) {
+    state.ecoStats = cloneEcoDefaults();
+  }
+  const metrics = calculateEcoMetrics(state.ecoStats[scope] || ECO_DEFAULT_STATS[scope]);
+  if (refs.metricsEl) {
+    refs.metricsEl.innerHTML = buildEcoMetricsMarkup(metrics);
+  }
+  if (refs.treeFillEl) {
+    refs.treeFillEl.style.height = `${metrics.progressPercent}%`;
+  }
+  if (refs.percentEl) {
+    refs.percentEl.textContent = `${metrics.progressPercent}%`;
+  }
+  if (refs.narrativeEl) {
+    refs.narrativeEl.textContent = buildEcoNarrative(scope, metrics);
+  }
+}
+
+function updateEcoDashboards() {
+  updateEcoDashboard('customer', {
+    metricsEl: els.customerEcoMetrics,
+    narrativeEl: els.customerEcoNarrative,
+    treeFillEl: els.customerTreeFill,
+    percentEl: els.customerTreePercent
+  });
+  updateEcoDashboard('cafe', {
+    metricsEl: els.cafeEcoMetrics,
+    narrativeEl: els.cafeEcoNarrative,
+    treeFillEl: els.cafeTreeFill,
+    percentEl: els.cafeTreePercent
+  });
+}
+
+function recordEcoEvent(scope, type) {
+  if (!state.ecoStats) {
+    state.ecoStats = cloneEcoDefaults();
+  }
+  if (!state.ecoStats[scope]) {
+    state.ecoStats[scope] = { borrows: 0, returns: 0 };
+  }
+  const key = type === 'borrow' ? 'borrows' : 'returns';
+  state.ecoStats[scope][key] = Math.max(0, Number(state.ecoStats[scope][key] || 0) + 1);
+  saveEcoStats();
+  updateEcoDashboards();
+}
+
+updateEcoDashboards();
 
 function showMessage(text, type = 'success') {
   const toast = document.createElement('div');
@@ -759,6 +903,7 @@ function updateUI() {
       els.profileAvatar.src = DEFAULT_AVATAR;
     }
   }
+  updateEcoDashboards();
 }
 
 function setAuth(token, user) {
@@ -998,6 +1143,7 @@ async function handleCustomerBorrow(evt) {
       body: JSON.stringify({ cafe_id: cafeId })
     });
     showMessage('Cup borrowed successfully');
+    recordEcoEvent('customer', 'borrow');
     await loadProfile();
     await loadTransactions();
   } catch (err) {
@@ -1019,6 +1165,7 @@ async function handleCustomerReturn(evt) {
       body: JSON.stringify({ cafe_id: cafeId })
     });
     showMessage('Cup returned successfully');
+    recordEcoEvent('customer', 'return');
     await loadProfile();
     await loadTransactions();
   } catch (err) {
@@ -1058,6 +1205,7 @@ async function handleStaffBorrow(evt) {
       body: JSON.stringify({ cafe_id: cafeId, customer_email: email })
     });
     showMessage('Borrow recorded');
+    recordEcoEvent('cafe', 'borrow');
   } catch (err) {
     showMessage(err.message, 'error');
   }
@@ -1077,6 +1225,7 @@ async function handleStaffReturn(evt) {
       body: JSON.stringify({ cafe_id: cafeId })
     });
     showMessage('Return accepted');
+    recordEcoEvent('cafe', 'return');
   } catch (err) {
     showMessage(err.message, 'error');
   }
