@@ -1,0 +1,3 @@
+backend/data/db.json
+backend/data/*.json
+node_modules

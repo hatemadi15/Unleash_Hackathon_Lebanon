@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ReCup Lebanon | Reusable Cup Network</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="hero">
+        <div class="hero__text">
+          <p class="eyebrow">Circular café network</p>
+          <h1>ReCup Lebanon</h1>
+          <p>
+            Borrow, return, or keep QR-tracked cups at any partner café. Staff and
+            customers share the same live status across the network.
+          </p>
+        </div>
+        <div class="hero__actions">
+          <button id="logoutBtn" class="hidden">Log out</button>
+        </div>
+      </header>
+
+      <main class="panel-grid">
+        <section id="mapSection" class="panel panel--full">
+          <div class="map-header">
+            <div>
+              <h2>Partner cafés map</h2>
+              <p class="muted">
+                Explore the ReCup network and jump to Google Maps for walking or driving
+                directions.
+              </p>
+            </div>
+            <div class="map-controls">
+              <button id="routeNearestBtn" type="button">Route to nearest café</button>
+              <a id="nearestDirectionsLink" class="ghost" target="_blank" rel="noopener"
+                >Google Maps link</a
+              >
+            </div>
+          </div>
+          <div id="cafeMap" class="map"></div>
+          <ul id="cafeList" class="cafe-list"></ul>
+        </section>
+
+        <section id="authSection" class="panel-grid two-col">
+          <div class="panel">
+            <h2>Join ReCup</h2>
+            <p class="muted">New customers register here to start borrowing cups.</p>
+            <form id="registerForm" class="form-grid">
+              <label>
+                Name
+                <input type="text" name="name" placeholder="Your name" />
+              </label>
+              <label>
+                Email
+                <input type="email" name="email" placeholder="you@example.com" required />
+              </label>
+              <label>
+                Password
+                <input type="password" name="password" placeholder="Choose a password" required />
+              </label>
+              <button type="submit">Create account</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2>Access your account</h2>
+            <p class="muted">Customers and café staff sign in with their email.</p>
+            <form id="loginForm" class="form-grid">
+              <label>
+                Email
+                <input type="email" name="email" required />
+              </label>
+              <label>
+                Password
+                <input type="password" name="password" required />
+              </label>
+              <button type="submit">Sign in</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="customerSection" class="panel-grid two-col hidden">
+          <div class="panel profile-panel">
+            <div class="profile-card">
+              <img id="profileAvatar" alt="Profile avatar" />
+              <div class="profile-card__meta">
+                <p class="muted">Customer</p>
+                <h2 id="profileName">Your name</h2>
+                <p id="customerInfo" class="profile-card__stats"></p>
+              </div>
+            </div>
+            <form id="profileForm" class="form-grid profile-form">
+              <label>
+                Display name
+                <input type="text" id="profileNameInput" placeholder="Preferred name" />
+              </label>
+              <label>
+                Profile photo
+                <input type="file" id="profileImageInput" accept="image/*" />
+              </label>
+              <div class="profile-form__actions">
+                <button type="submit">Save profile</button>
+                <button type="button" id="clearProfileImage" class="ghost">Remove photo</button>
+                <button type="button" id="refreshProfile" class="ghost">Refresh</button>
+              </div>
+            </form>
+          </div>
+          <div class="panel">
+            <h3>Borrow a cup</h3>
+            <form id="customerBorrowForm" class="form-grid">
+              <label>
+                Café
+                <select id="customerBorrowCafe"></select>
+              </label>
+              <label>
+                QR / Cup ID
+                <input type="text" id="customerBorrowQr" placeholder="Paste QR string" data-qr-input data-scan-default="true" required />
+              </label>
+              <button type="submit">Borrow cup</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h3>Return a cup</h3>
+            <form id="customerReturnForm" class="form-grid">
+              <label>
+                Café
+                <select id="customerReturnCafe"></select>
+              </label>
+              <label>
+                QR / Cup ID
+                <input type="text" id="customerReturnQr" placeholder="Paste QR string" data-qr-input required />
+              </label>
+              <button type="submit">Return cup</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h3>Keep your cup</h3>
+            <form id="customerPurchaseForm" class="form-grid">
+              <label>
+                QR / Cup ID
+                <input type="text" id="customerPurchaseQr" placeholder="Paste QR string" data-qr-input required />
+              </label>
+              <button type="submit">Keep cup</button>
+            </form>
+          </div>
+          <div class="panel panel--full">
+            <h3>Recent transactions</h3>
+            <ul id="transactionList" class="transaction-list"></ul>
+          </div>
+        </section>
+
+        <section id="staffSection" class="panel-grid two-col hidden">
+          <div class="panel">
+            <h2>Café staff tools</h2>
+            <p id="staffInfo"></p>
+            <label>
+              Active café
+              <select id="staffCafeSelect"></select>
+            </label>
+            <button id="refreshInventory">Refresh inventory</button>
+            <div id="inventoryInfo"></div>
+          </div>
+          <div class="panel">
+            <h3>Borrow for a customer</h3>
+            <form id="staffBorrowForm" class="form-grid">
+              <label>
+                Customer email
+                <input type="email" id="staffCustomerEmail" placeholder="customer@recup" required />
+              </label>
+              <label>
+                Cup QR / ID
+                <input type="text" id="staffBorrowQr" data-qr-input required />
+              </label>
+              <button type="submit">Borrow cup</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h3>Accept a return</h3>
+            <form id="staffReturnForm" class="form-grid">
+              <label>
+                Cup QR / ID
+                <input type="text" id="staffReturnQr" data-qr-input required />
+              </label>
+              <button type="submit">Accept return</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="scannerSection" class="panel panel--full hidden">
+          <div class="scanner-header">
+            <div>
+              <h3>QR camera scanner</h3>
+              <p class="muted">Autofills whichever QR input is focused. Works for customers and staff.</p>
+            </div>
+            <div class="scanner-controls">
+              <button id="startScannerBtn" type="button">Start camera</button>
+              <button id="stopScannerBtn" type="button" class="ghost">Stop camera</button>
+            </div>
+          </div>
+          <div id="qrScanner" class="scanner"></div>
+          <p id="qrScannerStatus" class="muted">Scanner idle</p>
+        </section>
+
+        <section id="messages" class="panel"></section>
+      </main>
+    </div>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
