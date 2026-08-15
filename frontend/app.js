@@ -1,6 +1,37 @@
 const DEFAULT_AVATAR =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><rect width="160" height="160" rx="32" fill="%23e0f2f1"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="60" font-family="Arial" fill="%230f766e">☕</text></svg>';
 
+const FALLBACK_CAFES = [
+  {
+    id: 'cafe-1',
+    name: 'Beirut Downtown Café',
+    address: 'Downtown Beirut',
+    location_lat: 33.895,
+    location_lng: 35.478
+  },
+  {
+    id: 'cafe-2',
+    name: 'Hamra Coffee Corner',
+    address: 'Hamra Street',
+    location_lat: 33.897,
+    location_lng: 35.48
+  },
+  {
+    id: 'cafe-3',
+    name: 'Gemmayzeh Espresso Bar',
+    address: 'Gouraud Street, Gemmayzeh',
+    location_lat: 33.8987,
+    location_lng: 35.5196
+  },
+  {
+    id: 'cafe-4',
+    name: 'Mar Mikhael Roastery',
+    address: 'Armenia Street, Mar Mikhael',
+    location_lat: 33.8974,
+    location_lng: 35.5332
+  }
+];
+
 const state = {
   token: localStorage.getItem('recup_token') || null,
   user: null,
@@ -12,10 +43,7 @@ let qrScannerInstance = null;
 let scannerRunning = false;
 let activeQrInput = null;
 let lastScan = '';
-let leafletMap = null;
-let markerLayer = null;
-let markerRefs = new Map();
-let activeMarkerId = null;
+let cafeMapController = null;
 
 const els = {
   authSection: document.getElementById('authSection'),
@@ -125,26 +153,352 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function ensureLeafletMap() {
-  if (!els.cafeMap) return null;
-  if (leafletMap) return leafletMap;
-  if (typeof L === 'undefined') {
-    console.warn('Leaflet has not loaded yet');
-    return null;
+const TILE_SIZE = 256;
+const DEFAULT_MAP_CENTER = { lat: 33.8938, lng: 35.5018 };
+const DEFAULT_MAP_ZOOM = 12;
+const MIN_MAP_ZOOM = 11;
+const MAX_MAP_ZOOM = 17;
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function mod(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
+function projectPoint(lat, lng) {
+  const sinLat = Math.sin((lat * Math.PI) / 180);
+  return {
+    x: (lng + 180) / 360,
+    y: 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)
+  };
+}
+
+function unprojectPoint(x, y) {
+  const lng = x * 360 - 180;
+  const lat = (180 / Math.PI) * Math.atan(Math.sinh(Math.PI * (1 - 2 * y)));
+  return { lat, lng };
+}
+
+class CafeTileMap {
+  constructor(container) {
+    this.container = container;
+    this.center = Object.assign({}, DEFAULT_MAP_CENTER);
+    this.zoom = DEFAULT_MAP_ZOOM;
+    this.cafes = [];
+    this.markerElements = new Map();
+    this.markerPositions = new Map();
+    this.activeMarkerId = null;
+    this.isDragging = false;
+    this.dragStart = null;
+    this.dragPointerId = null;
+    this.setupLayers();
+    this.bindEvents();
+    this.render();
   }
-  leafletMap = L.map(els.cafeMap, {
-    zoomControl: true,
-    scrollWheelZoom: false,
-    attributionControl: true
-  });
-  const defaultView = [33.8938, 35.5018];
-  leafletMap.setView(defaultView, 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(leafletMap);
-  markerLayer = L.layerGroup().addTo(leafletMap);
-  return leafletMap;
+
+  setupLayers() {
+    this.container.innerHTML = '';
+    this.container.classList.add('tile-map');
+    this.tilesLayer = document.createElement('div');
+    this.tilesLayer.className = 'tile-map__tiles';
+    this.markersLayer = document.createElement('div');
+    this.markersLayer.className = 'tile-map__markers';
+    this.popupEl = document.createElement('div');
+    this.popupEl.className = 'tile-map__popup hidden';
+    this.container.append(this.tilesLayer, this.markersLayer, this.popupEl);
+    this.controls = document.createElement('div');
+    this.controls.className = 'tile-map__control';
+    const zoomIn = document.createElement('button');
+    zoomIn.type = 'button';
+    zoomIn.textContent = '+';
+    zoomIn.setAttribute('aria-label', 'Zoom in');
+    zoomIn.addEventListener('click', () => this.setZoom(this.zoom + 1));
+    const zoomOut = document.createElement('button');
+    zoomOut.type = 'button';
+    zoomOut.textContent = '−';
+    zoomOut.setAttribute('aria-label', 'Zoom out');
+    zoomOut.addEventListener('click', () => this.setZoom(this.zoom - 1));
+    this.controls.append(zoomIn, zoomOut);
+    this.container.appendChild(this.controls);
+  }
+
+  bindEvents() {
+    this.container.addEventListener('pointerdown', evt => this.handlePointerDown(evt));
+    this.container.addEventListener('pointermove', evt => this.handlePointerMove(evt));
+    this.container.addEventListener('pointerup', evt => this.handlePointerUp(evt));
+    this.container.addEventListener('pointerleave', evt => this.handlePointerUp(evt));
+    this.container.addEventListener(
+      'wheel',
+      evt => {
+        evt.preventDefault();
+        const direction = evt.deltaY > 0 ? -1 : 1;
+        this.setZoom(this.zoom + direction);
+      },
+      { passive: false }
+    );
+    window.addEventListener('resize', () => this.render());
+    this.container.addEventListener('click', evt => {
+      if (evt.target === this.container) {
+        this.clearPopup();
+      }
+    });
+  }
+
+  handlePointerDown(evt) {
+    this.isDragging = true;
+    this.dragPointerId = evt.pointerId;
+    this.container.classList.add('is-dragging');
+    if (this.container.setPointerCapture) {
+      this.container.setPointerCapture(evt.pointerId);
+    }
+    const mapSize = this.getMapSize();
+    const centerPx = this.getCenterPx(mapSize);
+    this.dragStart = {
+      x: evt.clientX,
+      y: evt.clientY,
+      centerPx
+    };
+  }
+
+  handlePointerMove(evt) {
+    if (!this.isDragging || evt.pointerId !== this.dragPointerId) return;
+    if (!this.dragStart) return;
+    const deltaX = evt.clientX - this.dragStart.x;
+    const deltaY = evt.clientY - this.dragStart.y;
+    this.panBy(deltaX, deltaY);
+  }
+
+  handlePointerUp(evt) {
+    if (evt && evt.pointerId && evt.pointerId !== this.dragPointerId) return;
+    this.isDragging = false;
+    this.dragPointerId = null;
+    this.dragStart = null;
+    this.container.classList.remove('is-dragging');
+    if (evt && this.container.releasePointerCapture) {
+      try {
+        this.container.releasePointerCapture(evt.pointerId);
+      } catch (err) {
+        // Ignore release errors when pointer capture is not set.
+      }
+    }
+  }
+
+  getMapSize() {
+    return TILE_SIZE * Math.pow(2, this.zoom);
+  }
+
+  getCenterPx(mapSize) {
+    const projected = projectPoint(this.center.lat, this.center.lng);
+    return {
+      x: projected.x * mapSize,
+      y: projected.y * mapSize
+    };
+  }
+
+  panBy(deltaX, deltaY) {
+    const mapSize = this.getMapSize();
+    const startPx = this.dragStart ? this.dragStart.centerPx : this.getCenterPx(mapSize);
+    let newX = startPx.x - deltaX;
+    let newY = startPx.y - deltaY;
+    newX = mod(newX, mapSize);
+    newY = clamp(newY, 0, mapSize);
+    const xNorm = newX / mapSize;
+    const yNorm = newY / mapSize;
+    this.center = unprojectPoint(xNorm, yNorm);
+    this.render();
+  }
+
+  setZoom(value) {
+    const clamped = clamp(value, MIN_MAP_ZOOM, MAX_MAP_ZOOM);
+    if (clamped === this.zoom) return;
+    this.zoom = clamped;
+    this.render();
+  }
+
+  setCafes(cafes) {
+    this.cafes = cafes.slice();
+    if (!this.cafes.length) {
+      this.center = Object.assign({}, DEFAULT_MAP_CENTER);
+      this.zoom = DEFAULT_MAP_ZOOM;
+    }
+    this.markerElements.clear();
+    this.markerPositions = new Map();
+    this.render();
+  }
+
+  fitToCafes() {
+    if (!this.cafes.length) {
+      this.center = Object.assign({}, DEFAULT_MAP_CENTER);
+      this.zoom = DEFAULT_MAP_ZOOM;
+      this.render();
+      return;
+    }
+    const projected = this.cafes.map(cafe => projectPoint(cafe.location_lat, cafe.location_lng));
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    projected.forEach(point => {
+      xMin = Math.min(xMin, point.x);
+      xMax = Math.max(xMax, point.x);
+      yMin = Math.min(yMin, point.y);
+      yMax = Math.max(yMax, point.y);
+    });
+    const width = this.container.clientWidth || 600;
+    const height = this.container.clientHeight || 400;
+    const padding = 0.08;
+    const zoomX = Math.log2(width / (TILE_SIZE * Math.max(xMax - xMin, 0.0001) * (1 + padding)));
+    const zoomY = Math.log2(height / (TILE_SIZE * Math.max(yMax - yMin, 0.0001) * (1 + padding)));
+    let targetZoom = Math.min(zoomX, zoomY);
+    if (!Number.isFinite(targetZoom)) {
+      targetZoom = DEFAULT_MAP_ZOOM;
+    }
+    targetZoom = clamp(Math.floor(targetZoom), MIN_MAP_ZOOM, MAX_MAP_ZOOM);
+    const centerX = (xMin + xMax) / 2;
+    const centerY = (yMin + yMax) / 2;
+    this.center = unprojectPoint(centerX, centerY);
+    this.zoom = targetZoom;
+    this.render();
+  }
+
+  render() {
+    if (!this.container) return;
+    const rect = this.container.getBoundingClientRect();
+    this.width = rect.width;
+    this.height = rect.height;
+    if (!this.width || !this.height) return;
+    const mapSize = this.getMapSize();
+    const centerPx = this.getCenterPx(mapSize);
+    this.view = {
+      mapSize,
+      topLeftX: centerPx.x - this.width / 2,
+      topLeftY: centerPx.y - this.height / 2
+    };
+    this.renderTiles();
+    this.renderMarkers();
+  }
+
+  renderTiles() {
+    if (!this.view) return;
+    const { mapSize, topLeftX, topLeftY } = this.view;
+    const tileCount = Math.pow(2, this.zoom);
+    const xStart = Math.floor(topLeftX / TILE_SIZE) - 1;
+    const xEnd = Math.floor((topLeftX + this.width) / TILE_SIZE) + 1;
+    const yStart = Math.floor(topLeftY / TILE_SIZE) - 1;
+    const yEnd = Math.floor((topLeftY + this.height) / TILE_SIZE) + 1;
+    this.tilesLayer.innerHTML = '';
+    for (let x = xStart; x <= xEnd; x += 1) {
+      for (let y = yStart; y <= yEnd; y += 1) {
+        if (y < 0 || y >= tileCount) continue;
+        const tile = document.createElement('img');
+        const tileX = mod(x, tileCount);
+        tile.src = `https://tile.openstreetmap.org/${this.zoom}/${tileX}/${y}.png`;
+        tile.alt = '';
+        tile.draggable = false;
+        tile.loading = 'lazy';
+        tile.style.left = `${x * TILE_SIZE - topLeftX}px`;
+        tile.style.top = `${y * TILE_SIZE - topLeftY}px`;
+        this.tilesLayer.appendChild(tile);
+      }
+    }
+  }
+
+  renderMarkers() {
+    if (!this.view) return;
+    const { mapSize, topLeftX, topLeftY } = this.view;
+    this.markersLayer.innerHTML = '';
+    this.markerElements.clear();
+    this.markerPositions.clear();
+    this.cafes.forEach(cafe => {
+      const projected = projectPoint(cafe.location_lat, cafe.location_lng);
+      const px = projected.x * mapSize;
+      const py = projected.y * mapSize;
+      const left = px - topLeftX;
+      const top = py - topLeftY;
+      const marker = document.createElement('button');
+      marker.type = 'button';
+      marker.className = 'map-marker';
+      marker.style.left = `${left}px`;
+      marker.style.top = `${top}px`;
+      marker.innerHTML = '<span></span>';
+      marker.title = cafe.name || 'ReCup café';
+      marker.setAttribute('aria-label', `${cafe.name || 'ReCup café'} marker`);
+      marker.addEventListener('click', evt => {
+        evt.stopPropagation();
+        this.focusCafe(cafe.id, { pan: false, showPopup: true });
+      });
+      if (this.activeMarkerId === cafe.id) {
+        marker.classList.add('is-active');
+      }
+      this.markersLayer.appendChild(marker);
+      this.markerElements.set(cafe.id, marker);
+      this.markerPositions.set(cafe.id, { left, top });
+    });
+    if (this.activeMarkerId && !this.markerElements.has(this.activeMarkerId)) {
+      this.clearPopup();
+    }
+  }
+
+  focusCafe(cafeId, options = {}) {
+    if (!cafeId) {
+      this.clearPopup();
+      return;
+    }
+    const cafe = this.cafes.find(c => c.id === cafeId);
+    if (!cafe) return;
+    if (options.pan !== false) {
+      this.center = { lat: cafe.location_lat, lng: cafe.location_lng };
+      this.render();
+    }
+    this.highlightMarker(cafeId);
+    if (options.showPopup !== false) {
+      this.showPopup(cafe);
+    }
+  }
+
+  highlightMarker(cafeId) {
+    this.activeMarkerId = cafeId;
+    this.markerElements.forEach((el, id) => {
+      el.classList.toggle('is-active', id === cafeId);
+    });
+  }
+
+  showPopup(cafe) {
+    if (!this.markerPositions.has(cafe.id)) {
+      this.renderMarkers();
+    }
+    const position = this.markerPositions.get(cafe.id);
+    if (!position) return;
+    this.popupEl.innerHTML = buildCafePopupHtml(cafe);
+    this.popupEl.classList.remove('hidden');
+    const popupWidth = this.popupEl.offsetWidth || 240;
+    let left = position.left + 12;
+    let top = position.top - 16;
+    if (left + popupWidth > this.width) {
+      left = Math.max(16, this.width - popupWidth - 16);
+    }
+    if (top < 16) {
+      top = position.top + 16;
+    }
+    this.popupEl.style.left = `${left}px`;
+    this.popupEl.style.top = `${top}px`;
+  }
+
+  clearPopup() {
+    this.activeMarkerId = null;
+    this.popupEl.classList.add('hidden');
+    this.markerElements.forEach(el => el.classList.remove('is-active'));
+  }
+}
+
+function ensureCafeMap() {
+  if (!els.cafeMap) return null;
+  if (!cafeMapController) {
+    cafeMapController = new CafeTileMap(els.cafeMap);
+  }
+  return cafeMapController;
 }
 
 function buildCafePopupHtml(cafe) {
@@ -165,38 +519,17 @@ function buildCafePopupHtml(cafe) {
 }
 
 function updateCafeMap() {
-  const map = ensureLeafletMap();
+  const map = ensureCafeMap();
   const cafesWithCoords = state.cafes.filter(hasCafeCoordinates);
   if (els.mapEmptyState) {
     els.mapEmptyState.classList.toggle('hidden', Boolean(cafesWithCoords.length));
   }
-  if (!map || !markerLayer) return;
-  markerLayer.clearLayers();
-  markerRefs = new Map();
-  activeMarkerId = null;
-  if (!cafesWithCoords.length) {
-    map.setView([33.8938, 35.5018], 11);
-    return;
-  }
-  const bounds = L.latLngBounds([]);
-  cafesWithCoords.forEach(cafe => {
-    const coords = [cafe.location_lat, cafe.location_lng];
-    bounds.extend(coords);
-    const marker = L.marker(coords, { title: cafe.name || 'ReCup café' });
-    marker.bindPopup(buildCafePopupHtml(cafe));
-    marker.on('click', () => {
-      activeMarkerId = cafe.id;
-    });
-    marker.on('popupclose', () => {
-      if (activeMarkerId === cafe.id) {
-        activeMarkerId = null;
-      }
-    });
-    marker.addTo(markerLayer);
-    markerRefs.set(cafe.id, marker);
-  });
-  if (bounds.isValid()) {
-    map.fitBounds(bounds.pad(0.25));
+  if (!map) return;
+  map.setCafes(cafesWithCoords);
+  if (cafesWithCoords.length) {
+    map.fitToCafes();
+  } else {
+    map.clearPopup();
   }
 }
 
@@ -315,36 +648,33 @@ function routeToNearestCafe() {
 }
 
 function highlightMapMarker(cafeId) {
-  if (!leafletMap || !markerRefs.size) return;
+  const map = ensureCafeMap();
+  if (!map) return;
   if (!cafeId) {
-    if (activeMarkerId && markerRefs.get(activeMarkerId)) {
-      markerRefs.get(activeMarkerId).closePopup();
-    }
-    activeMarkerId = null;
+    map.clearPopup();
     return;
   }
-  const marker = markerRefs.get(cafeId);
-  if (marker) {
-    marker.openPopup();
-    const point = marker.getLatLng();
-    if (point) {
-      leafletMap.panTo(point, { animate: true });
-    }
-    activeMarkerId = cafeId;
-  }
+  map.focusCafe(cafeId, { pan: true, showPopup: true });
 }
 
 async function fetchCafes() {
   let cafes = [];
+  let usedFallback = false;
   try {
     const res = await fetch('/cafes');
     const data = await res.json();
     cafes = data.cafes || [];
   } catch (err) {
     console.error('Failed to load cafes', err);
-    showMessage('Unable to load cafés right now. Showing default map view.', 'error');
+    cafes = FALLBACK_CAFES;
+    usedFallback = true;
+    showMessage('Unable to load cafés right now. Showing seeded map view.', 'error');
   } finally {
-    state.cafes = cafes;
+    if (!cafes.length) {
+      cafes = FALLBACK_CAFES;
+      usedFallback = true;
+    }
+    state.cafes = cafes.map(cafe => Object.assign({}, cafe));
     populateCafeSelects();
     updateCafeMap();
     renderCafeList();
@@ -354,6 +684,9 @@ async function fetchCafes() {
       els.nearestDirectionsLink.textContent = fallbackCafe
         ? `Google Maps: ${fallbackCafe.name}`
         : 'Google Maps link';
+    }
+    if (usedFallback) {
+      console.warn('Using fallback cafe dataset for map rendering.');
     }
   }
 }

@@ -102,7 +102,12 @@ button:disabled {
 }
 
 .panel-grid.two-col {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+}
+
+.panel-grid.two-col > .panel {
+  min-width: 0;
 }
 
 .panel--full {
@@ -143,25 +148,96 @@ button:disabled {
   position: relative;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
   background: radial-gradient(circle at 30% 20%, rgba(14, 165, 233, 0.25), rgba(255, 255, 255, 0));
+  touch-action: none;
 }
 
-.map .leaflet-container,
-.leaflet-container {
+.tile-map {
+  position: relative;
   width: 100%;
   height: 100%;
+  cursor: grab;
   font-family: 'Inter', sans-serif;
+  user-select: none;
 }
 
-.leaflet-control-container .leaflet-control-zoom {
-  border: none;
+.tile-map.is-dragging {
+  cursor: grabbing;
+}
+
+.tile-map__tiles,
+.tile-map__markers {
+  position: absolute;
+  inset: 0;
+}
+
+.tile-map__tiles img {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  user-select: none;
+  pointer-events: none;
+  image-rendering: optimizeSpeed;
+}
+
+.tile-map__markers {
+  pointer-events: none;
+}
+
+.map-marker {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #f97316;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+  padding: 0;
+}
+
+.map-marker span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff, rgba(255, 255, 255, 0));
+}
+
+.map-marker.is-active {
+  background: #ea580c;
+  transform: translate(-50%, -110%) scale(1.1);
+}
+
+.tile-map__popup {
+  position: absolute;
+  min-width: 220px;
+  max-width: 260px;
+  z-index: 5;
+  transform: translate(-50%, -110%);
+  pointer-events: auto;
+}
+
+.tile-map__popup.hidden {
+  display: none;
+}
+
+.tile-map__control {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 6;
+}
+
+.tile-map__control button {
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
-}
-
-.leaflet-control-zoom a {
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--text);
+  padding: 0;
+  font-size: 1.2rem;
 }
 
 .map-empty {
@@ -393,6 +469,12 @@ textarea:focus {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+  width: 100%;
+}
+
+.profile-form__actions button {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
 .transaction-list {
@@ -503,5 +585,9 @@ textarea:focus {
   .profile-card__stats {
     grid-template-columns: minmax(180px, 1fr);
     justify-items: center;
+  }
+
+  .profile-form__actions button {
+    flex-basis: 100%;
   }
 }
