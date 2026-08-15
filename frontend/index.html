@@ -92,6 +92,17 @@
         </section>
 
         <section id="customerSection" class="panel-grid two-col hidden">
+          <div class="panel panel--full section-intro">
+            <div>
+              <p class="eyebrow">Customer dashboard</p>
+              <h2>Your personal view</h2>
+              <p class="muted">
+                Customers land on this screen after signing in. It combines your profile, borrow /
+                return tools, real-time transaction history, and the eco savings tree that grows as
+                you complete cycles.
+              </p>
+            </div>
+          </div>
           <div class="panel profile-panel">
             <div class="profile-card">
               <img id="profileAvatar" alt="Profile avatar" />
@@ -116,6 +127,23 @@
                 <button type="button" id="refreshProfile" class="ghost">Refresh</button>
               </div>
             </form>
+          </div>
+          <div class="panel eco-panel">
+            <div class="eco-panel__header">
+              <div>
+                <p class="eyebrow">Eco savings</p>
+                <h3>Your impact</h3>
+              </div>
+              <p id="customerEcoNarrative" class="eco-panel__summary muted"></p>
+            </div>
+            <div class="eco-panel__body">
+              <div class="eco-tree" aria-live="polite">
+                <div id="customerTreeFill" class="eco-tree__fill"></div>
+                <div class="eco-tree__icon" aria-hidden="true">🌳</div>
+                <span id="customerTreePercent" class="eco-tree__percent">0%</span>
+              </div>
+              <ul id="customerEcoMetrics" class="eco-metrics"></ul>
+            </div>
           </div>
           <div class="panel">
             <h3>Borrow a cup</h3>
@@ -190,6 +218,17 @@
         </section>
 
         <section id="staffSection" class="panel-grid two-col hidden">
+          <div class="panel panel--full section-intro">
+            <div>
+              <p class="eyebrow">Café team dashboard</p>
+              <h2>Staff-facing tools</h2>
+              <p class="muted">
+                Baristas and café managers see this workspace after logging in. It surfaces live
+                inventory, team eco savings, and quick forms for borrowing or accepting returns on
+                behalf of guests.
+              </p>
+            </div>
+          </div>
           <div class="panel">
             <h2>Café staff tools</h2>
             <p id="staffInfo"></p>
@@ -199,6 +238,23 @@
             </label>
             <button id="refreshInventory">Refresh inventory</button>
             <div id="inventoryInfo"></div>
+          </div>
+          <div class="panel eco-panel">
+            <div class="eco-panel__header">
+              <div>
+                <p class="eyebrow">Eco savings</p>
+                <h3>Shop-wide impact</h3>
+              </div>
+              <p id="cafeEcoNarrative" class="eco-panel__summary muted"></p>
+            </div>
+            <div class="eco-panel__body">
+              <div class="eco-tree" aria-live="polite">
+                <div id="cafeTreeFill" class="eco-tree__fill"></div>
+                <div class="eco-tree__icon" aria-hidden="true">🌳</div>
+                <span id="cafeTreePercent" class="eco-tree__percent">0%</span>
+              </div>
+              <ul id="cafeEcoMetrics" class="eco-metrics"></ul>
+            </div>
           </div>
           <div class="panel">
             <h3>Borrow for a customer</h3>

@@ -114,13 +114,27 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
-.panel {
+.panel { 
   background: var(--surface);
   border-radius: var(--radius-md);
   padding: 24px;
   box-shadow: var(--card-shadow);
   border: 1px solid var(--border);
   backdrop-filter: blur(10px);
+}
+
+.section-intro {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.section-intro h2 {
+  margin: 4px 0;
+}
+
+.section-intro p {
+  margin: 0;
 }
 
 .map-header {
@@ -508,6 +522,110 @@ textarea:focus {
 .profile-form__actions button {
   flex: 1 1 180px;
   min-width: 0;
+}
+
+.eco-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.eco-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.eco-panel__summary {
+  margin: 0;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.eco-panel__body {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.eco-tree {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  border-radius: 32px;
+  background: radial-gradient(circle at 30% 20%, rgba(16, 185, 129, 0.4), rgba(255, 255, 255, 0));
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.15), 0 20px 35px rgba(15, 23, 42, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72px;
+  overflow: hidden;
+}
+
+.eco-tree__fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0%;
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.65));
+  transition: height 0.4s ease;
+}
+
+.eco-tree__icon {
+  position: relative;
+  z-index: 1;
+}
+
+.eco-tree__percent {
+  position: absolute;
+  bottom: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 4px 12px;
+  border-radius: 999px;
+  z-index: 1;
+}
+
+.eco-metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 260px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.eco-metric {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 15px 25px rgba(15, 23, 42, 0.08);
+}
+
+.eco-metric span {
+  display: block;
+}
+
+.eco-metric__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.eco-metric__value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  margin-top: 6px;
 }
 
 .transaction-list {
