@@ -316,8 +316,9 @@ textarea:focus {
 
 .profile-card {
   display: flex;
-  gap: 20px;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
   background: linear-gradient(120deg, rgba(15, 118, 110, 0.08), rgba(14, 165, 233, 0.05));
   border-radius: var(--radius-md);
   padding: 20px;
@@ -325,27 +326,32 @@ textarea:focus {
 }
 
 .profile-card__meta {
-  flex: 1;
+  flex: 1 1 260px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
 }
 
 .profile-card__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
   background: transparent;
   padding: 0;
   color: inherit;
+  width: 100%;
 }
 
 .stat-chip {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  padding: 8px 12px;
+  justify-content: center;
+  padding: 10px 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(15, 118, 110, 0.2);
-  min-width: 120px;
+  min-height: 78px;
   box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
 }
 
@@ -375,6 +381,7 @@ textarea:focus {
   object-fit: cover;
   border: 3px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 15px 30px rgba(15, 23, 42, 0.2);
+  flex: 0 0 auto;
 }
 
 .profile-card__meta h2 {
@@ -484,6 +491,17 @@ textarea:focus {
 
   .profile-card {
     flex-direction: column;
+    align-items: center;
     text-align: center;
+  }
+
+  .profile-card__meta {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .profile-card__stats {
+    grid-template-columns: minmax(180px, 1fr);
+    justify-items: center;
   }
 }

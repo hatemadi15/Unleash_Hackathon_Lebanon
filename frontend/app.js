@@ -335,10 +335,16 @@ function highlightMapMarker(cafeId) {
 }
 
 async function fetchCafes() {
+  let cafes = [];
   try {
     const res = await fetch('/cafes');
     const data = await res.json();
-    state.cafes = data.cafes || [];
+    cafes = data.cafes || [];
+  } catch (err) {
+    console.error('Failed to load cafes', err);
+    showMessage('Unable to load cafés right now. Showing default map view.', 'error');
+  } finally {
+    state.cafes = cafes;
     populateCafeSelects();
     updateCafeMap();
     renderCafeList();
@@ -349,8 +355,6 @@ async function fetchCafes() {
         ? `Google Maps: ${fallbackCafe.name}`
         : 'Google Maps link';
     }
-  } catch (err) {
-    console.error('Failed to load cafes', err);
   }
 }
 
